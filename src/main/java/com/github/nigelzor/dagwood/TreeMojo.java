@@ -8,7 +8,6 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.List;
 
-import org.apache.maven.model.Model;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -19,8 +18,10 @@ import org.sonatype.aether.RepositorySystemSession;
 import org.sonatype.aether.collection.CollectRequest;
 import org.sonatype.aether.collection.CollectResult;
 import org.sonatype.aether.collection.DependencyCollectionException;
-import org.sonatype.aether.graph.Dependency;
 import org.sonatype.aether.repository.RemoteRepository;
+import org.sonatype.aether.resolution.ArtifactDescriptorException;
+import org.sonatype.aether.resolution.ArtifactDescriptorRequest;
+import org.sonatype.aether.resolution.ArtifactDescriptorResult;
 import org.sonatype.aether.util.artifact.DefaultArtifact;
 
 import com.github.nigelzor.dagwood.SerializingDependencyVisitor.NodeFormatter;
@@ -58,14 +59,6 @@ public class TreeMojo extends AbstractMojo {
 	private List<RemoteRepository> projectRepos;
 
 	/**
-	 * The project's remote repositories to use for the resolution of plugins and their dependencies.
-	 *
-	 * @parameter default-value="${project.remotePluginRepositories}"
-	 * @readonly
-	 */
-	private List<RemoteRepository> pluginRepos;
-
-	/**
 	 * If specified, this parameter will cause the dependency tree to be written to the path specified, instead of
 	 * writing to the console.
 	 * @parameter expression="${outputFile}"
@@ -75,46 +68,24 @@ public class TreeMojo extends AbstractMojo {
 	/**
 	 * The artifact to calculate dependencies for.
 	 *
-	 * @parameter expression="${artifact}"
+	 * @parameter expression="${artifact}" default-value="${project.groupId}:${project.artifactId}:${project.packaging}:${project.version}"
 	 */
 	private String artifact;
 
-	/**
-	 * The project to calculate dependencies for.
-	 *
-	 * @parameter expression="${project.model}"
-	 */
-	private Model project;
-
-	private AetherDependencyBuilder dependencyBuilder = new AetherDependencyBuilder();
-
 	public void execute() throws MojoExecutionException, MojoFailureException {
 		try {
+			ArtifactDescriptorResult artifactDescriptor = repoSystem.readArtifactDescriptor(repoSession,
+					new ArtifactDescriptorRequest(new DefaultArtifact(artifact), projectRepos, null));
+
 			CollectRequest collectRequest = new CollectRequest();
-			String rootName;
-
-			if (artifact != null) {
-				rootName = artifact;
-				collectRequest.setRoot(new Dependency(new DefaultArtifact(artifact), null));
-			} else {
-				if (project == null) {
-					throw new MojoExecutionException("Either project or artifact must be specified");
-				}
-				rootName = project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getPackaging() + ":" + project.getVersion();
-				dependencyBuilder.addDependenciesToRequest(collectRequest, project, repoSession.getArtifactTypeRegistry());
-			}
-
-			for (RemoteRepository repository : projectRepos) {
-				collectRequest.addRepository(repository);
-			}
-			for (RemoteRepository repository : pluginRepos) {
-				collectRequest.addRepository(repository);
-			}
+			collectRequest.setDependencies(artifactDescriptor.getDependencies());
+			collectRequest.setManagedDependencies(artifactDescriptor.getManagedDependencies());
+			collectRequest.setRepositories(projectRepos);
 
 			CollectResult dependencies = repoSystem.collectDependencies(repoSession, collectRequest);
 
 			StringWriter writer = new StringWriter();
-			NodeFormatter nodeFormatter = new DefaultNodeFormatter(rootName);
+			NodeFormatter nodeFormatter = new DefaultNodeFormatter(artifactDescriptor.getArtifact().toString());
 			dependencies.getRoot().accept(new SerializingDependencyVisitor(writer,
 					SerializingDependencyVisitor.STANDARD_TOKENS, nodeFormatter));
 
@@ -128,6 +99,8 @@ public class TreeMojo extends AbstractMojo {
 			} catch (IOException e) {
 				throw new MojoExecutionException("Failed to write dependencies to file", e);
 			}
+		} catch (ArtifactDescriptorException e) {
+			throw new MojoExecutionException("Failed to read artifact descriptor", e);
 		} catch (DependencyCollectionException e) {
 			throw new MojoExecutionException("Failed to collect dependencies", e);
 		}
