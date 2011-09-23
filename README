@@ -1,0 +1,10 @@
+dagwood-maven-plugin
+====================
+
+maven-dependency-plugin (more specifically dependency:tree) is an essential tool,
+but has issues in Maven 3 [1], and some serious outstanding bugs [2]. 
+
+dagwood has far fewer features (so far), but hopefully gives the right answers.
+
+[1] https://cwiki.apache.org/MAVEN/maven-3x-compatibility-notes.html#Maven3.xCompatibilityNotes-DependencyResolution
+[2] http://jira.codehaus.org/browse/MSHARED-167
