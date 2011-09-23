@@ -27,10 +27,9 @@ import com.github.nigelzor.dagwood.SerializingDependencyVisitor.NodeFormatter;
 import com.github.nigelzor.dagwood.SerializingDependencyVisitor.DefaultNodeFormatter;
 
 /**
- * Replacement for dependency:tree using Maven 3 dependency logic
+ * Displays the dependency tree for this project, or a specified artifact.
  *
  * @goal tree
- * @phase verify
  * @requiresProject false
  */
 public class TreeMojo extends AbstractMojo {
